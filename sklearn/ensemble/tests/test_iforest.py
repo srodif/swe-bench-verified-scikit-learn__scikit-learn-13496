@@ -359,3 +359,60 @@ def test_iforest_chunks_works2(
 ):
     test_iforest_works(contamination)
     assert mocked_get_chunk.call_count == n_predict_calls
+
+
+def test_iforest_warm_start():
+    """Test that warm_start parameter works correctly for IsolationForest."""
+    # Test if fitting incrementally with warm start gives a forest of the
+    # right size and the same results as a normal fit.
+    X = iris.data
+    
+    # Test if warm start is exposed in __init__ and works
+    clf_ws = IsolationForest(n_estimators=5, random_state=42, warm_start=True)
+    assert clf_ws.warm_start is True
+    
+    # First fit with 5 estimators
+    clf_ws.fit(X)
+    assert_equal(len(clf_ws.estimators_), 5)
+    
+    # Increase to 10 estimators with warm start
+    clf_ws.set_params(n_estimators=10)
+    clf_ws.fit(X)
+    assert_equal(len(clf_ws.estimators_), 10)
+    
+    # Test that same result is achieved with regular fit
+    clf_no_ws = IsolationForest(n_estimators=10, random_state=42, warm_start=False)
+    clf_no_ws.fit(X)
+    
+    # Both should have same number of estimators
+    assert_equal(len(clf_ws.estimators_), len(clf_no_ws.estimators_))
+    
+    # Should produce same results
+    assert_array_equal(clf_ws.decision_function(X), clf_no_ws.decision_function(X),
+                       err_msg="warm_start and regular fit should produce same results")
+
+
+def test_iforest_warm_start_smaller_n_estimators():
+    """Test that warm start with smaller n_estimators raises error."""
+    X = iris.data
+    clf = IsolationForest(n_estimators=5, warm_start=True, random_state=42)
+    clf.fit(X)
+    clf.set_params(n_estimators=3)
+    assert_raises(ValueError, clf.fit, X)
+
+
+def test_iforest_warm_start_equal_n_estimators():
+    """Test that warm start with equal n_estimators does nothing."""
+    X = iris.data
+    clf = IsolationForest(n_estimators=5, warm_start=True, random_state=42)
+    clf.fit(X)
+    
+    # Store the estimators
+    estimators_before = clf.estimators_.copy()
+    
+    # Fit again with same n_estimators - should warn and do nothing
+    assert_warns_message(UserWarning, "Warm-start fitting without increasing n_estimators", 
+                         clf.fit, X)
+    
+    # Should be the same estimators
+    assert estimators_before is clf.estimators_
